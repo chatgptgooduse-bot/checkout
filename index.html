@@ -104,10 +104,8 @@
                 return;
             }
 
-            // 精準對齊您的 POS 右側面板區塊大小
             pipWin = await window.documentPictureInPicture.requestWindow({ width: 530, height: 430 });
 
-            // 💡 終極壓榨空間排版：消滅所有無用 margin
             pipWin.document.head.innerHTML = `
                 <style>
                     body { 
@@ -122,7 +120,6 @@
                         text-align: center; margin: 0 0 6px 0; padding: 0;
                         line-height: 1.1; height: 38px;
                     }
-                    /* 極限利用空間：把多餘空白擠掉，高度放到極大 */
                     #s-menu { 
                         display: grid; grid-template-columns: 1fr 1fr; gap: 8px; 
                         width: 100%; max-height: 320px; overflow-y: auto; 
@@ -135,11 +132,8 @@
                         word-break: break-all; box-shadow: 0 3px 5px rgba(255,149,0,0.15);
                     }
                     .s-btn:active { background: #e08400; }
-                    
                     #bc-container { width: 100%; text-align: center; margin: 0; padding: 0; }
                     #bc-canvas { max-width: 95%; height: auto; display: none; margin: 0 auto; }
-                    
-                    /* 徹底移除 margin-top: auto，改用固定底部邊距 */
                     #h-box { 
                         font-size: 1.2rem; color: #ff9500; font-weight: bold; 
                         text-align: center; border-top: 2px solid #f5f5f7; 
@@ -216,6 +210,7 @@
             }
         };
 
+        // 💡 強化：選定商品時，發射無線電訊號給後台隱形掃描槍
         function showBarcode(item) {
             prodNameHtml.innerText = item.name;
             barcodeCanvas.style.display = "block";
@@ -238,6 +233,13 @@
                 } catch (error) {
                     bcCanvas.style.display = "none";
                 }
+
+                // 🌟 發射代碼給本地 Python 虛擬掃描槍
+                fetch(`http://127.0.0.1:5000/scan?code=${item.barcode}`).then(() => {
+                    pName.innerText = item.name + " 🚀 已隔空噴入POS";
+                }).catch(() => {
+                    pName.innerText = item.name + " (請啟動電腦背景Python)";
+                });
             }
         }
 
