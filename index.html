@@ -104,24 +104,52 @@
                 return;
             }
 
-            pipWin = await window.documentPictureInPicture.requestWindow({ width: 320, height: 480 });
+            // 💡 調整懸浮窗尺寸：寬 530, 高 430，精準完全覆蓋 POS 的觸控商品區
+            pipWin = await window.documentPictureInPicture.requestWindow({ width: 530, height: 430 });
 
+            // 💡 針對寬螢幕懸浮窗進行排版重構
             pipWin.document.head.innerHTML = `
                 <style>
-                    body { font-family: sans-serif; margin: 0; padding: 15px; display: flex; flex-direction: column; align-items: center; background: #ffffff; height: 90vh; overflow:hidden;}
-                    #p-name { font-size: 2.2rem; font-weight: 900; color: #000; text-align: center; margin-top: 10px; margin-bottom: 15px; min-height: 50px; line-height: 1.2;}
-                    #s-menu { display: flex; flex-direction: column; gap: 8px; width: 100%; max-height: 150px; overflow-y: auto; margin-bottom: 10px;}
-                    .s-btn { background: #ff9500; color: white; border: none; border-radius: 10px; padding: 12px; font-size: 1.4rem; font-weight: bold; cursor: pointer; width: 100%; }
+                    body { 
+                        font-family: "Microsoft JhengHei", sans-serif; margin: 0; padding: 12px; 
+                        display: flex; flex-direction: column; align-items: center; 
+                        background: #ffffff; height: 93vh; overflow: hidden; justify-content: flex-start;
+                    }
+                    #p-name { 
+                        font-size: 2.3rem; font-weight: 900; color: #007aff; 
+                        text-align: center; margin-top: 2px; margin-bottom: 8px; 
+                        min-height: 40px; line-height: 1.2;
+                    }
+                    /* 關鍵改動：選單改為 Grid 兩列並排，完美利用橫向空間 */
+                    #s-menu { 
+                        display: grid; grid-template-columns: 1fr 1fr; gap: 10px; 
+                        width: 100%; max-height: 240px; overflow-y: auto; 
+                        margin-bottom: 5px; padding: 2px; box-sizing: border-box;
+                    }
+                    .s-btn { 
+                        background: #ff9500; color: white; border: none; 
+                        border-radius: 10px; padding: 15px 5px; font-size: 1.5rem; 
+                        font-weight: bold; cursor: pointer; text-align: center;
+                        word-break: break-all; box-shadow: 0 4px 6px rgba(255,149,0,0.2);
+                    }
                     .s-btn:active { background: #e08400; }
-                    #bc-canvas { max-width: 100%; height: auto; display: none; margin: 0 auto; }
-                    #h-box { font-size: 1rem; color: #ff9500; font-weight: bold; margin-top: auto; text-align: center; border-top: 1px solid #eee; width: 100%; padding-top: 8px;}
+                    
+                    /* 條碼容器微調 */
+                    #bc-container { width: 100%; text-align: center; margin-top: 5px; }
+                    #bc-canvas { max-width: 90%; height: auto; display: none; margin: 0 auto; }
+                    
+                    #h-box { 
+                        font-size: 1.2rem; color: #ff9500; font-weight: bold; 
+                        margin-top: auto; text-align: center; border-top: 2px solid #f5f5f7; 
+                        width: 100%; padding-top: 6px;
+                    }
                 </style>
             `;
 
             pipWin.document.body.innerHTML = `
                 <div id="p-name">請開始說話...</div>
                 <div id="s-menu"></div>
-                <canvas id="bc-canvas"></canvas>
+                <div id="bc-container"><canvas id="bc-canvas"></canvas></div>
                 <div id="h-box">聽：<span id="h-text">-</span></div>
             `;
 
@@ -170,7 +198,7 @@
                     showBarcode(matchedItems[0]);
                 } else {
                     pName.innerText = "請選擇規格";
-                    sMenu.style.display = "flex";
+                    sMenu.style.display = "grid"; // 啟用並排網格
                     matchedItems.forEach(item => {
                         const btn = pipWin.document.createElement('button');
                         btn.className = 's-btn';
@@ -198,10 +226,10 @@
                 try {
                     window.JsBarcode(bcCanvas, item.barcode, {
                         format: "CODE128",
-                        width: 2.2,
-                        height: 80,
+                        width: 3,        // 加粗條碼，方便舊型掃描槍讀取螢幕
+                        height: 120,     // 加高條碼
                         displayValue: true,
-                        fontSize: 16,
+                        fontSize: 22,
                         margin: 10
                     });
                 } catch (error) {
