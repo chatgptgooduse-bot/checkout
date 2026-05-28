@@ -64,6 +64,7 @@
         const ignoreWords = ["我要找", "幫我找", "我要查", "幫我查", "那個", "商品是", "有沒有", "一下", "我要", "幫我", "找", "查"];
 
         let pipWin = null;
+        let watchDogTimer = null; // 💡 隱形保全計時器
 
         const statusDiv = document.getElementById('status');
         const prodNameHtml = document.getElementById('prod-name');
@@ -162,11 +163,39 @@
 
         let isAutoListening = false;
         function toggleListening() { if (isAutoListening) stopAutoListening(); else startAutoListening(); }
-        function startAutoListening() { isAutoListening = true; micBtn.classList.add("active-listening"); try { recognition.start(); } catch (e) {} }
-        function stopAutoListening() { isAutoListening = false; micBtn.classList.remove("active-listening"); recognition.stop(); }
+        
+        // 💡 啟動語音時，順便餵食隱形保全
+        function startAutoListening() { 
+            isAutoListening = true; 
+            micBtn.classList.add("active-listening"); 
+            try { recognition.start(); } catch (e) {} 
+            feedWatchDog(); 
+        }
+        
+        function stopAutoListening() { 
+            isAutoListening = false; 
+            micBtn.classList.remove("active-listening"); 
+            recognition.stop(); 
+            clearTimeout(watchDogTimer);
+        }
+        
         recognition.onend = () => { if (isAutoListening) { try { recognition.start(); } catch (e) {} } };
 
+        // 💡 核心魔法：如果 3.5 秒內完全安靜，就代表網頁可能聾了，強制「電擊重啟」語音！
+        function feedWatchDog() {
+            clearTimeout(watchDogTimer);
+            if (!isAutoListening) return;
+            watchDogTimer = setTimeout(() => {
+                console.log("⚡ 偵測到網頁可能卡死，隱形保全正在強制重啟麥克風...");
+                try { recognition.stop(); } catch(e){}
+                setTimeout(() => { try { recognition.start(); } catch(e){} }, 100);
+                feedWatchDog(); // 繼續下一輪守護
+            }, 3500); 
+        }
+
         recognition.onresult = (event) => {
+            feedWatchDog(); // 只要有收到聲音（哪怕是環境雜音），就代表還活著，重設保全時間
+            
             let currentResultIndex = event.resultIndex;
             let transcript = event.results[currentResultIndex][0].transcript.trim();
             let cleanText = transcript.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, "");
@@ -210,7 +239,6 @@
             }
         };
 
-        // 💡 強化：選定商品時，發射無線電訊號給後台隱形掃描槍
         function showBarcode(item) {
             prodNameHtml.innerText = item.name;
             barcodeCanvas.style.display = "block";
@@ -234,11 +262,11 @@
                     bcCanvas.style.display = "none";
                 }
 
-                // 🌟 發射代碼給本地 Python 虛擬掃描槍
+                // 發射代碼給本地 Python 
                 fetch(`http://127.0.0.1:5000/scan?code=${item.barcode}`).then(() => {
-                    pName.innerText = item.name + " 🚀 已隔空噴入POS";
+                    pName.innerText = item.name + " 🚀 已自動灌入";
                 }).catch(() => {
-                    pName.innerText = item.name + " (請啟動電腦背景Python)";
+                    pName.innerText = item.name + " (請以管理員啟動CMD)";
                 });
             }
         }
