@@ -61,10 +61,10 @@
         let BARCODE_DATABASE = [];
         let sheetId = "1rV1jwD3sy5Aib1f2ZnSdSkkrcoEIvJ8DMhzcZbEyaKc"; 
         let lastScannedText = ""; 
-        const ignoreWords = ["我要找", "幫我找", "我要查", "幫我查", "那個", "商品是", "有沒有", "一下", "我要", "幫我", "找", "查"];
+        const ignoreWords = ["我要找", "幫我找", "我要查", "幫我查", "那個", "商品是", "有沒有", "一下", "幫我", "找", "查"];
 
         let pipWin = null;
-        let watchDogTimer = null; // 💡 隱形保全計時器
+        let watchDogTimer = null; 
 
         const statusDiv = document.getElementById('status');
         const prodNameHtml = document.getElementById('prod-name');
@@ -105,17 +105,31 @@
                 return;
             }
 
-            pipWin = await window.documentPictureInPicture.requestWindow({ width: 530, height: 430 });
+            // 💡 預設開啟寬 530、高 450
+            pipWin = await window.documentPictureInPicture.requestWindow({ width: 530, height: 450 });
 
             pipWin.document.head.innerHTML = `
                 <style>
                     body { 
                         font-family: "Microsoft JhengHei", sans-serif; 
-                        margin: 0; padding: 8px; 
+                        margin: 0; padding: 4px; 
                         display: flex; flex-direction: column; align-items: center; 
                         background: #ffffff; height: 100vh; overflow: hidden; 
                         box-sizing: border-box; justify-content: flex-start;
                     }
+                    /* 🌟 頂部手動手動收縮按鈕樣式 */
+                    #toggle-box-btn {
+                        width: 98%; background-color: #ff3b30; color: white; border: none;
+                        border-radius: 6px; padding: 10px 0; font-size: 1.2rem; font-weight: bold;
+                        cursor: pointer; text-align: center; margin-bottom: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    }
+                    #toggle-box-btn.collapsed { background-color: #34c759; }
+                    
+                    /* 包裹下方所有內容的容器，用來一鍵隱藏 */
+                    #content-wrapper {
+                        width: 100%; display: flex; flex-direction: column; align-items: center;
+                    }
+                    
                     #p-name { 
                         font-size: 2.1rem; font-weight: 900; color: #007aff; 
                         text-align: center; margin: 0 0 6px 0; padding: 0;
@@ -145,11 +159,37 @@
             `;
 
             pipWin.document.body.innerHTML = `
-                <div id="p-name">請開始說話...</div>
-                <div id="s-menu"></div>
-                <div id="bc-container"><canvas id="bc-canvas"></canvas></div>
-                <div id="h-box">聽：<span id="h-text">-</span></div>
+                <button id="toggle-box-btn">➖ 點我收起視窗 (露出金額欄位)</button>
+                <div id="content-wrapper">
+                    <div id="p-name">請開始說話...</div>
+                    <div id="s-menu"></div>
+                    <div id="bc-container"><canvas id="bc-canvas"></canvas></div>
+                    <div id="h-box">聽：<span id="h-text">-</span></div>
+                </div>
             `;
+
+            // 💡 綁定手動收合按鈕事件
+            const tBtn = pipWin.document.getElementById('toggle-box-btn');
+            const wrapper = pipWin.document.getElementById('content-wrapper');
+            let isCollapsed = false;
+
+            tBtn.onclick = () => {
+                if (!isCollapsed) {
+                    // 🔴 執行收起：藏匿內容，並利用 API 強制將外框壓到極扁，絕對不擋視線
+                    wrapper.style.display = "none";
+                    tBtn.innerText = "➕ 點我展開語音助理";
+                    tBtn.classList.add('collapsed');
+                    pipWin.resizeTo(530, 75); // 壓扁到只留一顆按鈕的高度
+                    isCollapsed = true;
+                } else {
+                    // 🟢 執行展開：還原內容，並將視窗撐回原大小
+                    wrapper.style.display = "flex";
+                    tBtn.innerText = "➖ 點我收起視窗 (露出金額欄位)";
+                    tBtn.classList.remove('collapsed');
+                    pipWin.resizeTo(530, 450); // 還原成正常工作高度
+                    isCollapsed = false;
+                }
+            };
 
             statusDiv.innerText = "📌 永遠置頂懸浮窗已啟動！";
             if(!isAutoListening) { startAutoListening(); }
@@ -164,7 +204,6 @@
         let isAutoListening = false;
         function toggleListening() { if (isAutoListening) stopAutoListening(); else startAutoListening(); }
         
-        // 💡 啟動語音時，順便餵食隱形保全
         function startAutoListening() { 
             isAutoListening = true; 
             micBtn.classList.add("active-listening"); 
@@ -181,20 +220,18 @@
         
         recognition.onend = () => { if (isAutoListening) { try { recognition.start(); } catch (e) {} } };
 
-        // 💡 核心魔法：如果 3.5 秒內完全安靜，就代表網頁可能聾了，強制「電擊重啟」語音！
         function feedWatchDog() {
             clearTimeout(watchDogTimer);
             if (!isAutoListening) return;
             watchDogTimer = setTimeout(() => {
-                console.log("⚡ 偵測到網頁可能卡死，隱形保全正在強制重啟麥克風...");
                 try { recognition.stop(); } catch(e){}
                 setTimeout(() => { try { recognition.start(); } catch(e){} }, 100);
-                feedWatchDog(); // 繼續下一輪守護
+                feedWatchDog(); 
             }, 3500); 
         }
 
         recognition.onresult = (event) => {
-            feedWatchDog(); // 只要有收到聲音（哪怕是環境雜音），就代表還活著，重設保全時間
+            feedWatchDog(); 
             
             let currentResultIndex = event.resultIndex;
             let transcript = event.results[currentResultIndex][0].transcript.trim();
@@ -265,9 +302,7 @@
                 // 發射代碼給本地 Python 
                 fetch(`http://127.0.0.1:5000/scan?code=${item.barcode}`).then(() => {
                     pName.innerText = item.name + " 🚀 已自動灌入";
-                }).catch(() => {
-                    pName.innerText = item.name + " (請以管理員啟動CMD)";
-                });
+                }).catch(() => {});
             }
         }
 
