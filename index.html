@@ -63,8 +63,16 @@
         let lastScannedText = ""; 
         const ignoreWords = ["我要找", "幫我找", "我要查", "幫我查", "那個", "商品是", "有沒有", "一下", "幫我", "找", "查"];
 
+        // 💡 修正一：店用同音字自動校正翻譯字典 (未來若有其他字誤判，可以直接在這邊加)
+        const soundAlikeDictionary = {
+            "藝人": "薏仁",
+            "一人": "薏仁",
+            "義人": "薏仁"
+        };
+
         let pipWin = null;
         let watchDogTimer = null; 
+        let isScanCoolingDown = false; // 💡 修正二：防重複刷入的冷卻鎖
 
         const statusDiv = document.getElementById('status');
         const prodNameHtml = document.getElementById('prod-name');
@@ -105,7 +113,6 @@
                 return;
             }
 
-            // 💡 預設開啟寬 530、高 450
             pipWin = await window.documentPictureInPicture.requestWindow({ width: 530, height: 450 });
 
             pipWin.document.head.innerHTML = `
@@ -117,19 +124,13 @@
                         background: #ffffff; height: 100vh; overflow: hidden; 
                         box-sizing: border-box; justify-content: flex-start;
                     }
-                    /* 🌟 頂部手動手動收縮按鈕樣式 */
                     #toggle-box-btn {
                         width: 98%; background-color: #ff3b30; color: white; border: none;
                         border-radius: 6px; padding: 10px 0; font-size: 1.2rem; font-weight: bold;
                         cursor: pointer; text-align: center; margin-bottom: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                     }
                     #toggle-box-btn.collapsed { background-color: #34c759; }
-                    
-                    /* 包裹下方所有內容的容器，用來一鍵隱藏 */
-                    #content-wrapper {
-                        width: 100%; display: flex; flex-direction: column; align-items: center;
-                    }
-                    
+                    #content-wrapper { width: 100%; display: flex; flex-direction: column; align-items: center; }
                     #p-name { 
                         font-size: 2.1rem; font-weight: 900; color: #007aff; 
                         text-align: center; margin: 0 0 6px 0; padding: 0;
@@ -168,25 +169,22 @@
                 </div>
             `;
 
-            // 💡 綁定手動收合按鈕事件
             const tBtn = pipWin.document.getElementById('toggle-box-btn');
             const wrapper = pipWin.document.getElementById('content-wrapper');
             let isCollapsed = false;
 
             tBtn.onclick = () => {
                 if (!isCollapsed) {
-                    // 🔴 執行收起：藏匿內容，並利用 API 強制將外框壓到極扁，絕對不擋視線
                     wrapper.style.display = "none";
                     tBtn.innerText = "➕ 點我展開語音助理";
                     tBtn.classList.add('collapsed');
-                    pipWin.resizeTo(530, 75); // 壓扁到只留一顆按鈕的高度
+                    pipWin.resizeTo(530, 75); 
                     isCollapsed = true;
                 } else {
-                    // 🟢 執行展開：還原內容，並將視窗撐回原大小
                     wrapper.style.display = "flex";
                     tBtn.innerText = "➖ 點我收起視窗 (露出金額欄位)";
                     tBtn.classList.remove('collapsed');
-                    pipWin.resizeTo(530, 450); // 還原成正常工作高度
+                    pipWin.resizeTo(530, 450); 
                     isCollapsed = false;
                 }
             };
@@ -238,6 +236,13 @@
             let cleanText = transcript.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, "");
             ignoreWords.forEach(word => { cleanText = cleanText.replace(word, ""); });
 
+            // 💡 修正一核心：自動同音字校正檢查
+            for (const key in soundAlikeDictionary) {
+                if (cleanText.includes(key)) {
+                    cleanText = cleanText.replace(key, soundAlikeDictionary[key]);
+                }
+            }
+
             if (!cleanText || cleanText === lastScannedText) return;
             
             heardTextHtml.innerText = cleanText;
@@ -277,6 +282,12 @@
         };
 
         function showBarcode(item) {
+            // 💡 修正二核心：如果系統正在 1.5 秒冷卻內，直接攔截，絕不允許發射第二次！
+            if (isScanCoolingDown) {
+                console.log("🛡️ 觸發防抖鎖，攔截重複刷入訊號");
+                return;
+            }
+
             prodNameHtml.innerText = item.name;
             barcodeCanvas.style.display = "block";
             try { JsBarcode(barcodeCanvas, item.barcode, { format: "CODE128", width: 3, height: 95, displayValue: true, fontSize: 22 }); } catch (e) {}
@@ -299,10 +310,18 @@
                     bcCanvas.style.display = "none";
                 }
 
+                // 進入冷卻狀態
+                isScanCoolingDown = true;
+
                 // 發射代碼給本地 Python 
                 fetch(`http://127.0.0.1:5000/scan?code=${item.barcode}`).then(() => {
                     pName.innerText = item.name + " 🚀 已自動灌入";
-                }).catch(() => {});
+                }).catch(() => {
+                    pName.innerText = item.name + " (請檢查Python是否有開)";
+                }).finally(() => {
+                    // 1.5 秒後解除冷卻鎖，恢復正常功能
+                    setTimeout(() => { isScanCoolingDown = false; }, 1500);
+                });
             }
         }
 
