@@ -235,3 +235,100 @@
             clearTimeout(watchDogTimer);
             if (!isAutoListening) return;
             watchDogTimer = setTimeout(() => {
+                try { recognition.stop(); } catch(e){}
+                setTimeout(() => { try { recognition.start(); } catch(e){} }, 100);
+                feedWatchDog(); 
+            }, 3500); 
+        }
+
+        recognition.onresult = (event) => {
+            feedWatchDog(); 
+            
+            let currentResultIndex = event.resultIndex;
+            let transcript = event.results[currentResultIndex][0].transcript.trim();
+            let cleanText = transcript.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, "");
+            ignoreWords.forEach(word => { cleanText = cleanText.replace(word, ""); });
+
+            for (const key in soundAlikeDictionary) {
+                if (cleanText.includes(key)) {
+                    cleanText = cleanText.replace(key, soundAlikeDictionary[key]);
+                }
+            }
+
+            if (!cleanText || cleanText === lastScannedText) return;
+            
+            heardTextHtml.innerText = cleanText;
+            if (pipWin) { pipWin.document.getElementById('h-text').innerText = cleanText; }
+
+            let matchedItems = BARCODE_DATABASE.filter(item => cleanText.includes(item.name) || item.name.includes(cleanText));
+            if (matchedItems.length === 0) return; 
+
+            lastScannedText = cleanText;
+
+            if (pipWin) {
+                const pName = pipWin.document.getElementById('p-name');
+                const sMenu = pipWin.document.getElementById('s-menu');
+                const bcCanvas = pipWin.document.getElementById('bc-canvas');
+                
+                sMenu.innerHTML = "";
+                sMenu.style.display = "none";
+                bcCanvas.style.display = "none";
+
+                if (matchedItems.length === 1) {
+                    showBarcode(matchedItems[0]);
+                } else {
+                    pName.innerText = "請選擇規格";
+                    sMenu.style.display = "grid"; 
+                    matchedItems.forEach(item => {
+                        const btn = pipWin.document.createElement('button');
+                        btn.className = 's-btn';
+                        btn.innerText = item.name; 
+                        btn.onclick = () => {
+                            showBarcode(item);
+                            sMenu.style.display = "none";
+                        };
+                        sMenu.appendChild(btn);
+                    });
+                }
+            }
+        };
+
+        function showBarcode(item) {
+            if (isScanCoolingDown) return;
+
+            prodNameHtml.innerText = item.name;
+            barcodeCanvas.style.display = "block";
+            try { JsBarcode(barcodeCanvas, item.barcode, { format: "CODE128", width: 3, height: 95, displayValue: true, fontSize: 22 }); } catch (e) {}
+
+            if (pipWin) {
+                const pName = pipWin.document.getElementById('p-name');
+                const bcCanvas = pipWin.document.getElementById('bc-canvas');
+                pName.innerText = item.name;
+                bcCanvas.style.display = "block";
+                try {
+                    window.JsBarcode(bcCanvas, item.barcode, {
+                        format: "CODE128",
+                        width: 2.5,       
+                        height: 60,     
+                        displayValue: true,
+                        fontSize: 16,
+                        margin: 2
+                    });
+                } catch (error) {
+                    bcCanvas.style.display = "none";
+                }
+
+                isScanCoolingDown = true;
+
+                fetch(`http://127.0.0.1:5000/scan?code=${item.barcode}`).then(() => {
+                    pName.innerText = item.name + " 🚀已灌入";
+                }).catch(() => {}).finally(() => {
+                    setTimeout(() => { isScanCoolingDown = false; }, 1500);
+                });
+            }
+        }
+
+        fetchCloudData();
+    </script>
+</body>
+</html>
