@@ -58,8 +58,16 @@
     </div>
 
     <script>
+        // 💡 宣告網頁元素物件（修正：移到最頂端防止未定義錯誤）
+        const statusDiv = document.getElementById('status');
+        const prodNameHtml = document.getElementById('prod-name');
+        const specMenuHtml = document.getElementById('spec-menu');
+        const barcodeCanvas = document.getElementById('barcode-canvas');
+        const heardTextHtml = document.getElementById('heard-text');
+        const micBtn = document.getElementById('mic-btn');
+
         let BARCODE_DATABASE = [];
-        let sheetId = "1rV1jwD3sy5Aib1f2ZnSdSkkrcoEIvJ8DMhzcZbEyaKc"; 
+        let sheetId = "1rV1jwD3sy5Aib1f2ZnSdSkkrcoEIvJ8DMhzcZbEyaKc"; // 🟢 經實測，您的店用實算表 ID 100% 正確
         let lastScannedText = ""; 
         const ignoreWords = ["我要找", "幫我找", "我要查", "幫我查", "那個", "商品是", "有沒有", "一下", "幫我", "找", "查"];
 
@@ -71,7 +79,6 @@
         let watchDogTimer = null; 
         let isScanCoolingDown = false; 
 
-        // 💡 記憶外面小姐拉大後的尺寸（預設寬 540，高 480）
         let userSavedWidth = 540;
         let userSavedHeight = 480;
 
@@ -107,7 +114,6 @@
                 return;
             }
 
-            // 💡 首次開啟使用記憶的大小
             pipWin = await window.documentPictureInPicture.requestWindow({ width: userSavedWidth, height: userSavedHeight });
 
             pipWin.document.head.innerHTML = `
@@ -119,7 +125,6 @@
                         background: #ffffff; height: 100vh; overflow: hidden; 
                         box-sizing: border-box; justify-content: flex-start;
                     }
-                    /* 💡 頂部控制列：按鈕與聽話內容倂排，極大化節省垂直空間 */
                     #top-bar {
                         display: flex; width: 98%; gap: 6px; align-items: center; margin-bottom: 4px; height: 38px;
                     }
@@ -136,8 +141,6 @@
                         height: 100%; display: flex; align-items: center; justify-content: center;
                         overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
                     }
-
-                    /* 💡 全彈性容器：高度直接填滿剩餘視窗 */
                     #content-wrapper {
                         width: 100%; flex: 1; display: flex; flex-direction: column; align-items: center; overflow: hidden;
                     }
@@ -146,7 +149,6 @@
                         text-align: center; margin: 2px 0 6px 0; padding: 0;
                         line-height: 1.1;
                     }
-                    /* 💡 核心修正：取消 max-height 限制，改用 flex: 1 彈性擴展，選項再多都會自動拉長撐滿 */
                     #s-menu { 
                         display: grid; grid-template-columns: 1fr 1fr; gap: 8px; 
                         width: 98%; flex: 1; overflow-y: auto; 
@@ -183,17 +185,15 @@
 
             tBtn.onclick = () => {
                 if (!isCollapsed) {
-                    // 🔴 點擊收起：先在背景記憶小姐此時此刻拉大的寬高！
                     userSavedWidth = pipWin.outerWidth;
                     userSavedHeight = pipWin.outerHeight;
 
                     wrapper.style.display = "none";
                     tBtn.innerText = "➕ 展開語音助理";
                     tBtn.classList.add('collapsed');
-                    pipWin.resizeTo(userSavedWidth, 75); // 寬度不動，高度壓扁
+                    pipWin.resizeTo(userSavedWidth, 75); 
                     isCollapsed = true;
                 } else {
-                    // 🟢 點擊展開：直接還原成小姐剛剛拉大後的精準外框，一毫都不差！
                     wrapper.style.display = "flex";
                     tBtn.innerText = "➖ 收起視窗";
                     tBtn.classList.remove('collapsed');
