@@ -58,7 +58,6 @@
     </div>
 
     <script>
-        // 💡 宣告網頁元素物件（修正：移到最頂端防止未定義錯誤）
         const statusDiv = document.getElementById('status');
         const prodNameHtml = document.getElementById('prod-name');
         const specMenuHtml = document.getElementById('spec-menu');
@@ -67,13 +66,9 @@
         const micBtn = document.getElementById('mic-btn');
 
         let BARCODE_DATABASE = [];
-        let sheetId = "1rV1jwD3sy5Aib1f2ZnSdSkkrcoEIvJ8DMhzcZbEyaKc"; // 🟢 經實測，您的店用實算表 ID 100% 正確
+        let sheetId = "1rV1jwD3sy5Aib1f2ZnSdSkkrcoEIvJ8DMhzcZbEyaKc"; 
         let lastScannedText = ""; 
         const ignoreWords = ["我要找", "幫我找", "我要查", "幫我查", "那個", "商品是", "有沒有", "一下", "幫我", "找", "查"];
-
-        const soundAlikeDictionary = {
-            "藝人": "薏仁", "一人": "薏仁", "義人": "薏仁"
-        };
 
         let pipWin = null;
         let watchDogTimer = null; 
@@ -96,7 +91,9 @@
                     BARCODE_DATABASE = rows.map(row => {
                         return {
                             name: row.c[0] ? row.c[0].v.toString().trim() : "",
-                            barcode: row.c[1] ? row.c[1].v.toString().trim() : ""
+                            barcode: row.c[1] ? row.c[1].v.toString().trim() : "",
+                            // 💡 核心升級：自動讀取試算表的第三欄（C欄）作為隱形同音字字典，如果沒寫就留空
+                            alias: row.c[2] ? row.c[2].v.toString().trim() : ""
                         };
                     }).filter(item => item.name !== "");
                     
@@ -249,18 +246,18 @@
             let cleanText = transcript.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, "");
             ignoreWords.forEach(word => { cleanText = cleanText.replace(word, ""); });
 
-            for (const key in soundAlikeDictionary) {
-                if (cleanText.includes(key)) {
-                    cleanText = cleanText.replace(key, soundAlikeDictionary[key]);
-                }
-            }
-
             if (!cleanText || cleanText === lastScannedText) return;
             
             heardTextHtml.innerText = cleanText;
             if (pipWin) { pipWin.document.getElementById('h-text').innerText = cleanText; }
 
-            let matchedItems = BARCODE_DATABASE.filter(item => cleanText.includes(item.name) || item.name.includes(cleanText));
+            // 💡 核心雙向比對升級：同時比對標準品名(item.name)與隱形聯想詞(item.alias)
+            let matchedItems = BARCODE_DATABASE.filter(item => 
+                cleanText.includes(item.name) || 
+                item.name.includes(cleanText) || 
+                (item.alias && item.alias.includes(cleanText))
+            );
+            
             if (matchedItems.length === 0) return; 
 
             lastScannedText = cleanText;
@@ -282,7 +279,7 @@
                     matchedItems.forEach(item => {
                         const btn = pipWin.document.createElement('button');
                         btn.className = 's-btn';
-                        btn.innerText = item.name; 
+                        btn.innerText = item.name; // 💡 畫面永遠只單純顯示乾淨的 A 欄標準品名！
                         btn.onclick = () => {
                             showBarcode(item);
                             sMenu.style.display = "none";
