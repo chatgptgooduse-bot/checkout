@@ -70,6 +70,10 @@
         let lastScannedText = ""; 
         const ignoreWords = ["我要找", "幫我找", "我要查", "幫我查", "那個", "商品是", "有沒有", "一下", "幫我", "找", "查"];
 
+        const soundAlikeDictionary = {
+            "藝人": "薏仁", "一人": "薏仁", "義人": "薏仁"
+        };
+
         let pipWin = null;
         let watchDogTimer = null; 
         let isScanCoolingDown = false; 
@@ -89,11 +93,14 @@
                     const rows = data.table.rows;
                     
                     BARCODE_DATABASE = rows.map(row => {
+                        // 💡 將 C 欄讀取進來，並切碎成「獨立聯想詞陣列」方便精準比對
+                        let rawAlias = row.c[2] ? row.c[2].v.toString().trim() : "";
+                        let aliasArray = rawAlias ? rawAlias.split(/[\s,，]+/) : []; // 支援空白或逗號分隔
+                        
                         return {
                             name: row.c[0] ? row.c[0].v.toString().trim() : "",
                             barcode: row.c[1] ? row.c[1].v.toString().trim() : "",
-                            // 💡 核心升級：自動讀取試算表的第三欄（C欄）作為隱形同音字字典，如果沒寫就留空
-                            alias: row.c[2] ? row.c[2].v.toString().trim() : ""
+                            aliasList: aliasArray 
                         };
                     }).filter(item => item.name !== "");
                     
@@ -246,17 +253,28 @@
             let cleanText = transcript.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, "");
             ignoreWords.forEach(word => { cleanText = cleanText.replace(word, ""); });
 
-            if (!cleanText || cleanText === lastScannedText) return;
+            for (const key in soundAlikeDictionary) {
+                if (cleanText.includes(key)) {
+                    cleanText = cleanText.replace(key, soundAlikeDictionary[key]);
+                }
+            }
+
+            // 💡 智慧防護線一：必須大於或等於 2 個字，才啟動搜尋，防單字（如「小」）轟炸
+            if (!cleanText || cleanText.length < 2 || cleanText === lastScannedText) return;
             
             heardTextHtml.innerText = cleanText;
             if (pipWin) { pipWin.document.getElementById('h-text').innerText = cleanText; }
 
-            // 💡 核心雙向比對升級：同時比對標準品名(item.name)與隱形聯想詞(item.alias)
-            let matchedItems = BARCODE_DATABASE.filter(item => 
-                cleanText.includes(item.name) || 
-                item.name.includes(cleanText) || 
-                (item.alias && item.alias.includes(cleanText))
-            );
+            // 💡 智慧防護線二：雙軌精準過濾
+            let matchedItems = BARCODE_DATABASE.filter(item => {
+                // 軌道 A：小姐講的話有包含在標準品名裡（例如講「二砂」包含在「進口二砂...」裡）
+                let matchName = cleanText.includes(item.name) || item.name.includes(cleanText);
+                
+                // 軌道 B：小姐講的話與試算表 C 欄的任何一個聯想詞「完全相同」（精準命中，不玩包含比對）
+                let matchAlias = item.aliasList && item.aliasList.some(alias => alias === cleanText);
+                
+                return matchName || matchAlias;
+            });
             
             if (matchedItems.length === 0) return; 
 
@@ -279,7 +297,7 @@
                     matchedItems.forEach(item => {
                         const btn = pipWin.document.createElement('button');
                         btn.className = 's-btn';
-                        btn.innerText = item.name; // 💡 畫面永遠只單純顯示乾淨的 A 欄標準品名！
+                        btn.innerText = item.name; 
                         btn.onclick = () => {
                             showBarcode(item);
                             sMenu.style.display = "none";
