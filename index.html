@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>極速結帳助理-智慧懸浮置頂版</title>
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -30,13 +29,6 @@
         #spec-menu { display: flex; flex-direction: column; gap: 10px; width: 90%; margin-bottom: 15px; }
         .spec-btn { background-color: #ff9500; color: white; border: none; border-radius: 12px; padding: 14px 10px; font-size: 1.6rem; font-weight: bold; cursor: pointer; }
         .spec-btn:active { background-color: #e08400; }
-        
-        #barcode-container { width: 100%; min-height: 140px; }
-        #barcode-canvas { max-width: 95%; height: auto; margin: 0 auto; }
-        
-        button#mic-btn { background-color: #007aff; color: white; border: none; border-radius: 50%; width: 80px; height: 80px; font-size: 35px; cursor: pointer; margin-top: 15px; }
-        button#mic-btn.active-listening { background-color: #ff3b30; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(255, 59, 48, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); } }
         #heard-box { font-size: 1.1rem; color: #ff9500; font-weight: bold; margin-top: 10px; }
     </style>
 </head>
@@ -50,10 +42,6 @@
     <div id="main-ui">
         <div id="prod-name">語音快查</div>
         <div id="spec-menu"></div>
-        <div id="barcode-container">
-            <canvas id="barcode-canvas"></canvas>
-        </div>
-        <button id="mic-btn" onclick="toggleListening()">🎤</button>
         <div id="heard-box">正在聽：<span id="heard-text">-</span></div>
     </div>
 
@@ -61,9 +49,7 @@
         const statusDiv = document.getElementById('status');
         const prodNameHtml = document.getElementById('prod-name');
         const specMenuHtml = document.getElementById('spec-menu');
-        const barcodeCanvas = document.getElementById('barcode-canvas');
         const heardTextHtml = document.getElementById('heard-text');
-        const micBtn = document.getElementById('mic-btn');
 
         let BARCODE_DATABASE = [];
         let sheetId = "1rV1jwD3sy5Aib1f2ZnSdSkkrcoEIvJ8DMhzcZbEyaKc"; 
@@ -95,28 +81,19 @@
                     BARCODE_DATABASE = rows.map(row => {
                         if (!row || !row.c) return null;
                         
+                        // 萬能提取：有格式化文本優先拿，沒寫就拿原始值
                         let pName = "";
-                        if (row.c[0]) {
-                            pName = row.c[0].f ? row.c[0].f.toString().trim() : (row.c[0].v ? row.c[0].v.toString().trim() : "");
-                        }
+                        if (row.c[0]) pName = row.c[0].f ? row.c[0].f.toString().trim() : (row.c[0].v ? row.c[0].v.toString().trim() : "");
                         
                         let pCode = "";
-                        if (row.c[1]) {
-                            pCode = row.c[1].f ? row.c[1].f.toString().trim() : (row.c[1].v ? row.c[1].v.toString().trim() : "");
-                        }
+                        if (row.c[1]) pCode = row.c[1].f ? row.c[1].f.toString().trim() : (row.c[1].v ? row.c[1].v.toString().trim() : "");
                         
                         let rawAlias = "";
-                        if (row.c[2]) {
-                            rawAlias = row.c[2].f ? row.c[2].f.toString().trim() : (row.c[2].v ? row.c[2].v.toString().trim() : "");
-                        }
+                        if (row.c[2]) rawAlias = row.c[2].f ? row.c[2].f.toString().trim() : (row.c[2].v ? row.c[2].v.toString().trim() : "");
                         
                         let aliasArray = rawAlias ? rawAlias.split(/[\s,，]+/) : [];
                         
-                        return {
-                            name: pName,
-                            barcode: pCode,
-                            aliasList: aliasArray 
-                        };
+                        return { name: pName, barcode: pCode, aliasList: aliasArray };
                     }).filter(item => item !== null && item.name !== "");
                     
                     statusDiv.innerText = `本地同步成功！共載入 ${BARCODE_DATABASE.length} 個品項`;
@@ -144,45 +121,15 @@
                         background: #ffffff; height: 100vh; overflow: hidden; 
                         box-sizing: border-box; justify-content: flex-start;
                     }
-                    #top-bar {
-                        display: flex; width: 98%; gap: 6px; align-items: center; margin-bottom: 4px; height: 38px;
-                    }
-                    #toggle-box-btn {
-                        flex: 1; background-color: #ff3b30; color: white; border: none;
-                        border-radius: 6px; padding: 8px 0; font-size: 1.1rem; font-weight: bold;
-                        cursor: pointer; text-align: center; height: 100%;
-                    }
+                    #top-bar { display: flex; width: 98%; gap: 6px; align-items: center; margin-bottom: 4px; height: 38px; }
+                    #toggle-box-btn { flex: 1; background-color: #ff3b30; color: white; border: none; border-radius: 6px; padding: 8px 0; font-size: 1.1rem; font-weight: bold; cursor: pointer; text-align: center; height: 100%; }
                     #toggle-box-btn.collapsed { background-color: #34c759; }
-                    
-                    #h-box { 
-                        width: 130px; font-size: 1rem; color: #ff9500; font-weight: bold; 
-                        text-align: center; background: #f5f5f7; border-radius: 6px;
-                        height: 100%; display: flex; align-items: center; justify-content: center;
-                        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-                    }
-                    #content-wrapper {
-                        width: 100%; flex: 1; display: flex; flex-direction: column; align-items: center; overflow: hidden;
-                    }
-                    #p-name { 
-                        font-size: 1.6rem; font-weight: 900; color: #007aff; 
-                        text-align: center; margin: 2px 0 6px 0; padding: 0;
-                        line-height: 1.1;
-                    }
-                    #s-menu { 
-                        display: grid; grid-template-columns: 1fr 1fr; gap: 8px; 
-                        width: 98%; flex: 1; overflow-y: auto; 
-                        margin: 0; padding: 0 2px 6px 2px; box-sizing: border-box;
-                    }
-                    .s-btn { 
-                        background: #ff9500; color: white; border: none; 
-                        border-radius: 8px; font-size: 1.5rem; 
-                        font-weight: bold; cursor: pointer; text-align: center;
-                        word-break: break-all; box-shadow: 0 3px 5px rgba(255,149,0,0.15);
-                        display: flex; align-items: center; justify-content: center; padding: 12px 4px;
-                    }
+                    #h-box { width: 130px; font-size: 1rem; color: #ff9500; font-weight: bold; text-align: center; background: #f5f5f7; border-radius: 6px; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                    #content-wrapper { width: 100%; flex: 1; display: flex; flex-direction: column; align-items: center; overflow: hidden; }
+                    #p-name { font-size: 1.6rem; font-weight: 900; color: #007aff; text-align: center; margin: 2px 0 6px 0; padding: 0; line-height: 1.1; }
+                    #s-menu { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 98%; flex: 1; overflow-y: auto; margin: 0; padding: 0 2px 6px 2px; box-sizing: border-box; }
+                    .s-btn { background: #ff9500; color: white; border: none; border-radius: 8px; font-size: 1.5rem; font-weight: bold; cursor: pointer; text-align: center; word-break: break-all; box-shadow: 0 3px 5px rgba(255,149,0,0.15); display: flex; align-items: center; justify-content: center; padding: 12px 4px; }
                     .s-btn:active { background: #e08400; }
-                    #bc-container { width: 100%; text-align: center; margin: 0; padding: 0; }
-                    #bc-canvas { max-width: 90%; height: 65px; display: none; margin: 0 auto; }
                 </style>
             `;
 
@@ -194,7 +141,6 @@
                 <div id="content-wrapper">
                     <div id="p-name">請開始說話...</div>
                     <div id="s-menu"></div>
-                    <div id="bc-container"><canvas id="bc-canvas"></canvas></div>
                 </div>
             `;
 
@@ -206,7 +152,6 @@
                 if (!isCollapsed) {
                     userSavedWidth = pipWin.outerWidth;
                     userSavedHeight = pipWin.outerHeight;
-
                     wrapper.style.display = "none";
                     tBtn.innerText = "➕ 展開語音助理";
                     tBtn.classList.add('collapsed');
@@ -236,14 +181,12 @@
         
         function startAutoListening() { 
             isAutoListening = true; 
-            micBtn.classList.add("active-listening"); 
             try { recognition.start(); } catch (e) {} 
             feedWatchDog(); 
         }
         
         function stopAutoListening() { 
             isAutoListening = false; 
-            micBtn.classList.remove("active-listening"); 
             recognition.stop(); 
             clearTimeout(watchDogTimer);
         }
@@ -262,16 +205,13 @@
 
         recognition.onresult = (event) => {
             feedWatchDog(); 
-            
             let currentResultIndex = event.resultIndex;
             let transcript = event.results[currentResultIndex][0].transcript.trim();
             let cleanText = transcript.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, "");
             ignoreWords.forEach(word => { cleanText = cleanText.replace(word, ""); });
 
             for (const key in soundAlikeDictionary) {
-                if (cleanText.includes(key)) {
-                    cleanText = cleanText.replace(key, soundAlikeDictionary[key]);
-                }
+                if (cleanText.includes(key)) cleanText = cleanText.replace(key, soundAlikeDictionary[key]);
             }
 
             if (!cleanText || cleanText.length < 2 || cleanText === lastScannedText) return;
@@ -286,32 +226,25 @@
             });
             
             if (matchedItems.length === 0) return; 
-
             lastScannedText = cleanText;
 
-            // 💡 調整核心：無論有沒有開啟懸浮窗，大主網頁一律同步渲染規格選單與按鈕！
             renderSpecificationMenu(matchedItems);
         };
 
         function renderSpecificationMenu(matchedItems) {
-            // 1. 清空並處理大網頁的 UI
             specMenuHtml.innerHTML = "";
             specMenuHtml.style.display = "none";
-            barcodeCanvas.style.display = "none";
 
-            // 2. 如果有開啟懸浮窗，同步清空懸浮窗 UI
-            let pipName = null, pipMenu = null, pipCanvas = null;
+            let pipName = null, pipMenu = null;
             if (pipWin) {
                 pipName = pipWin.document.getElementById('p-name');
                 pipMenu = pipWin.document.getElementById('s-menu');
-                pipCanvas = pipWin.document.getElementById('bc-canvas');
                 pipMenu.innerHTML = "";
                 pipMenu.style.display = "none";
-                pipCanvas.style.display = "none";
             }
 
             if (matchedItems.length === 1) {
-                showBarcode(matchedItems[0]);
+                sendCodeToPython(matchedItems[0]);
             } else {
                 prodNameHtml.innerText = "請選擇規格";
                 specMenuHtml.style.display = "flex";
@@ -322,65 +255,47 @@
                 }
 
                 matchedItems.forEach(item => {
-                    // 為大網頁建立按鈕
                     const btn = document.createElement('button');
                     btn.className = 'spec-btn';
                     btn.innerText = item.name;
-                    btn.onclick = () => { showBarcode(item); specMenuHtml.style.display = "none"; };
+                    btn.onclick = () => { sendCodeToPython(item); specMenuHtml.style.display = "none"; };
                     specMenuHtml.appendChild(btn);
 
-                    // 同步為懸浮窗建立按鈕
                     if (pipWin && pipMenu) {
                         const pipBtn = pipWin.document.createElement('button');
                         pipBtn.className = 's-btn';
                         pipBtn.innerText = item.name;
-                        pipBtn.onclick = () => { showBarcode(item); pipMenu.style.display = "none"; };
+                        pipBtn.onclick = () => { sendCodeToPython(item); pipMenu.style.display = "none"; };
                         pipMenu.appendChild(pipBtn);
                     }
                 });
             }
         }
 
-        function showBarcode(item) {
-            if (isScanCoolingDown || item.barcode === undefined || item.barcode === null || item.barcode === "") return;
+        function sendCodeToPython(item) {
+            if (isScanCoolingDown) return;
 
-            // 在大主網頁畫條碼
-            prodNameHtml.innerText = item.name;
-            barcodeCanvas.style.display = "block";
-            try { JsBarcode(barcodeCanvas, item.barcode, { format: "CODE128", width: 3, height: 95, displayValue: true, fontSize: 22 }); } catch (e) {}
-
-            // 在置頂懸浮窗畫條碼
-            if (pipWin) {
-                const pName = pipWin.document.getElementById('p-name');
-                const bcCanvas = pipWin.document.getElementById('bc-canvas');
-                pName.innerText = item.name;
-                bcCanvas.style.display = "block";
-                try {
-                    window.JsBarcode(bcCanvas, item.barcode, {
-                        format: "CODE128",
-                        width: 2.5,       
-                        height: 60,     
-                        displayValue: true,
-                        fontSize: 16,
-                        margin: 2
-                    });
-                } catch (error) {
-                    bcCanvas.style.display = "none";
-                }
-            }
+            prodNameHtml.innerText = item.name + " 🚀發射中";
+            if (pipWin) pipWin.document.getElementById('p-name').innerText = item.name + " 🚀發射中";
 
             isScanCoolingDown = true;
 
-            // 💡 關鍵修正：不分大網頁還是懸浮窗，只要觸發點擊，一律全面對本地 Python 發射 fetch 訊號！
-            let encodedCode = encodeURIComponent(item.barcode);
-            fetch(`http://127.0.0.1:5000/scan?code=${encodedCode}`).then(() => {
-                prodNameHtml.innerText = item.name + " 🚀已灌入";
-                if (pipWin) {
-                    pipWin.document.getElementById('p-name').innerText = item.name + " 🚀已灌入";
-                }
-            }).catch(() => {}).finally(() => {
-                setTimeout(() => { isScanCoolingDown = false; }, 1500);
-            });
+            // 💡 終極無阻擋發射：管它代碼是啥，強制用萬國碼 URL 編碼發射給 Python
+            let finalCode = item.barcode ? item.barcode.toString().trim() : "";
+            let encodedCode = encodeURIComponent(finalCode);
+
+            fetch(`http://127.0.0.1:5000/scan?code=${encodedCode}`)
+                .then(() => {
+                    prodNameHtml.innerText = item.name + " 🚀已灌入";
+                    if (pipWin) pipWin.document.getElementById('p-name').innerText = item.name + " 🚀已灌入";
+                })
+                .catch(() => {
+                    prodNameHtml.innerText = item.name + " ❌失敗(未開Python)";
+                    if (pipWin) pipWin.document.getElementById('p-name').innerText = item.name + " ❌失敗(未開Python)";
+                })
+                .finally(() => {
+                    setTimeout(() => { isScanCoolingDown = false; }, 1200);
+                });
         }
 
         fetchCloudData();
