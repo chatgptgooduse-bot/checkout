@@ -93,16 +93,25 @@
                     const rows = data.table.rows;
                     
                     BARCODE_DATABASE = rows.map(row => {
-                        // 💡 將 C 欄讀取進來，並切碎成「獨立聯想詞陣列」方便精準比對
-                        let rawAlias = row.c[2] ? row.c[2].v.toString().trim() : "";
-                        let aliasArray = rawAlias ? rawAlias.split(/[\s,，]+/) : []; // 支援空白或逗號分隔
+                        // 💡 超強防呆讀取：全面安全檢查，確保儲存格為空時不會發生偏位
+                        let pName = (row.c && row.c[0] && row.c[0].v) ? row.c[0].v.toString().trim() : "";
+                        
+                        // 修正核心：確保代碼（B欄）無論是純數字還是英數、橫槓，通通安全轉成字串
+                        let pCode = "";
+                        if (row.c && row.c[1]) {
+                            if (row.c[1].f) pCode = row.c[1].f.toString().trim(); // 如果是格式化文字（如帶有英數）
+                            else if (row.c[1].v) pCode = row.c[1].v.toString().trim(); // 如果是普通數值
+                        }
+                        
+                        let rawAlias = (row.c && row.c[2] && row.c[2].v) ? row.c[2].v.toString().trim() : "";
+                        let aliasArray = rawAlias ? rawAlias.split(/[\s,，]+/) : [];
                         
                         return {
-                            name: row.c[0] ? row.c[0].v.toString().trim() : "",
-                            barcode: row.c[1] ? row.c[1].v.toString().trim() : "",
+                            name: pName,
+                            barcode: pCode, // 100% 確保拿到代碼
                             aliasList: aliasArray 
                         };
-                    }).filter(item => item.name !== "");
+                    }).filter(item => item.name !== "" && item.barcode !== ""); // 💡 沒寫代碼的品項直接過濾，確保資料庫純淨
                     
                     statusDiv.innerText = `本地同步成功！共載入 ${BARCODE_DATABASE.length} 個品項`;
                     prodNameHtml.innerText = "請點擊綠色置頂按鈕";
@@ -259,20 +268,14 @@
                 }
             }
 
-            // 💡 智慧防護線一：必須大於或等於 2 個字，才啟動搜尋，防單字（如「小」）轟炸
             if (!cleanText || cleanText.length < 2 || cleanText === lastScannedText) return;
             
             heardTextHtml.innerText = cleanText;
             if (pipWin) { pipWin.document.getElementById('h-text').innerText = cleanText; }
 
-            // 💡 智慧防護線二：雙軌精準過濾
             let matchedItems = BARCODE_DATABASE.filter(item => {
-                // 軌道 A：小姐講的話有包含在標準品名裡（例如講「二砂」包含在「進口二砂...」裡）
                 let matchName = cleanText.includes(item.name) || item.name.includes(cleanText);
-                
-                // 軌道 B：小姐講的話與試算表 C 欄的任何一個聯想詞「完全相同」（精準命中，不玩包含比對）
                 let matchAlias = item.aliasList && item.aliasList.some(alias => alias === cleanText);
-                
                 return matchName || matchAlias;
             });
             
@@ -309,7 +312,8 @@
         };
 
         function showBarcode(item) {
-            if (isScanCoolingDown) return;
+            // 💡 攔截防呆：如果抓出來的條碼是空的，絕對不允許發射！
+            if (isScanCoolingDown || !item.barcode) return;
 
             prodNameHtml.innerText = item.name;
             barcodeCanvas.style.display = "block";
@@ -335,7 +339,9 @@
 
                 isScanCoolingDown = true;
 
-                fetch(`http://127.0.0.1:5000/scan?code=${item.barcode}`).then(() => {
+                // 💡 這裡會發射百分之百有資料的代碼字串給 Python
+                let encodedCode = encodeURIComponent(item.barcode);
+                fetch(`http://127.0.0.1:5000/scan?code=${encodedCode}`).then(() => {
                     pName.innerText = item.name + " 🚀已灌入";
                 }).catch(() => {}).finally(() => {
                     setTimeout(() => { isScanCoolingDown = false; }, 1500);
