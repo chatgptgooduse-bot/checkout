@@ -83,6 +83,7 @@
 
         function fetchCloudData() {
             statusDiv.innerText = "正在更新本地資料庫...";
+            // 💡 調整網址：改採 Visualization API 的標準格式輸出，確保中英數混合代碼不中斷
             const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=Sheet1`;
             
             fetch(url)
@@ -93,25 +94,32 @@
                     const rows = data.table.rows;
                     
                     BARCODE_DATABASE = rows.map(row => {
-                        // 💡 超強防呆讀取：全面安全檢查，確保儲存格為空時不會發生偏位
-                        let pName = (row.c && row.c[0] && row.c[0].v) ? row.c[0].v.toString().trim() : "";
+                        if (!row || !row.c) return null;
                         
-                        // 修正核心：確保代碼（B欄）無論是純數字還是英數、橫槓，通通安全轉成字串
-                        let pCode = "";
-                        if (row.c && row.c[1]) {
-                            if (row.c[1].f) pCode = row.c[1].f.toString().trim(); // 如果是格式化文字（如帶有英數）
-                            else if (row.c[1].v) pCode = row.c[1].v.toString().trim(); // 如果是普通數值
+                        // 💡 萬能純文字讀取：優先抓取格式化後的顯示文字 (.f)，其次抓取原始值 (.v)
+                        let pName = "";
+                        if (row.c[0]) {
+                            pName = row.c[0].f ? row.c[0].f.toString().trim() : (row.c[0].v ? row.c[0].v.toString().trim() : "");
                         }
                         
-                        let rawAlias = (row.c && row.c[2] && row.c[2].v) ? row.c[2].v.toString().trim() : "";
+                        let pCode = "";
+                        if (row.c[1]) {
+                            pCode = row.c[1].f ? row.c[1].f.toString().trim() : (row.c[1].v ? row.c[1].v.toString().trim() : "");
+                        }
+                        
+                        let rawAlias = "";
+                        if (row.c[2]) {
+                            rawAlias = row.c[2].f ? row.c[2].f.toString().trim() : (row.c[2].v ? row.c[2].v.toString().trim() : "");
+                        }
+                        
                         let aliasArray = rawAlias ? rawAlias.split(/[\s,，]+/) : [];
                         
                         return {
                             name: pName,
-                            barcode: pCode, // 100% 確保拿到代碼
+                            barcode: pCode,
                             aliasList: aliasArray 
                         };
-                    }).filter(item => item.name !== "" && item.barcode !== ""); // 💡 沒寫代碼的品項直接過濾，確保資料庫純淨
+                    }).filter(item => item !== null && item.name !== ""); // 放寬過濾機制，只要有品名就抓
                     
                     statusDiv.innerText = `本地同步成功！共載入 ${BARCODE_DATABASE.length} 個品項`;
                     prodNameHtml.innerText = "請點擊綠色置頂按鈕";
@@ -312,7 +320,6 @@
         };
 
         function showBarcode(item) {
-            // 💡 攔截防呆：如果抓出來的條碼是空的，絕對不允許發射！
             if (isScanCoolingDown || !item.barcode) return;
 
             prodNameHtml.innerText = item.name;
@@ -339,7 +346,6 @@
 
                 isScanCoolingDown = true;
 
-                // 💡 這裡會發射百分之百有資料的代碼字串給 Python
                 let encodedCode = encodeURIComponent(item.barcode);
                 fetch(`http://127.0.0.1:5000/scan?code=${encodedCode}`).then(() => {
                     pName.innerText = item.name + " 🚀已灌入";
