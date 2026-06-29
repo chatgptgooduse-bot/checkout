@@ -83,7 +83,6 @@
 
         function fetchCloudData() {
             statusDiv.innerText = "正在更新本地資料庫...";
-            // 💡 調整網址：改採 Visualization API 的標準格式輸出，確保中英數混合代碼不中斷
             const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=Sheet1`;
             
             fetch(url)
@@ -96,7 +95,6 @@
                     BARCODE_DATABASE = rows.map(row => {
                         if (!row || !row.c) return null;
                         
-                        // 💡 萬能純文字讀取：優先抓取格式化後的顯示文字 (.f)，其次抓取原始值 (.v)
                         let pName = "";
                         if (row.c[0]) {
                             pName = row.c[0].f ? row.c[0].f.toString().trim() : (row.c[0].v ? row.c[0].v.toString().trim() : "");
@@ -119,7 +117,7 @@
                             barcode: pCode,
                             aliasList: aliasArray 
                         };
-                    }).filter(item => item !== null && item.name !== ""); // 放寬過濾機制，只要有品名就抓
+                    }).filter(item => item !== null && item.name !== "");
                     
                     statusDiv.innerText = `本地同步成功！共載入 ${BARCODE_DATABASE.length} 個品項`;
                     prodNameHtml.innerText = "請點擊綠色置頂按鈕";
@@ -320,7 +318,8 @@
         };
 
         function showBarcode(item) {
-            if (isScanCoolingDown || !item.barcode) return;
+            // 💡 修正防線：拿掉對於特殊格式條碼的排斥，只要有讀到代碼文字字串就放行
+            if (isScanCoolingDown || item.barcode === undefined || item.barcode === null || item.barcode === "") return;
 
             prodNameHtml.innerText = item.name;
             barcodeCanvas.style.display = "block";
