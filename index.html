@@ -289,42 +289,67 @@
 
             lastScannedText = cleanText;
 
-            if (pipWin) {
-                const pName = pipWin.document.getElementById('p-name');
-                const sMenu = pipWin.document.getElementById('s-menu');
-                const bcCanvas = pipWin.document.getElementById('bc-canvas');
-                
-                sMenu.innerHTML = "";
-                sMenu.style.display = "none";
-                bcCanvas.style.display = "none";
-
-                if (matchedItems.length === 1) {
-                    showBarcode(matchedItems[0]);
-                } else {
-                    pName.innerText = "請選擇規格";
-                    sMenu.style.display = "grid"; 
-                    matchedItems.forEach(item => {
-                        const btn = pipWin.document.createElement('button');
-                        btn.className = 's-btn';
-                        btn.innerText = item.name; 
-                        btn.onclick = () => {
-                            showBarcode(item);
-                            sMenu.style.display = "none";
-                        };
-                        sMenu.appendChild(btn);
-                    });
-                }
-            }
+            // 💡 調整核心：無論有沒有開啟懸浮窗，大主網頁一律同步渲染規格選單與按鈕！
+            renderSpecificationMenu(matchedItems);
         };
 
+        function renderSpecificationMenu(matchedItems) {
+            // 1. 清空並處理大網頁的 UI
+            specMenuHtml.innerHTML = "";
+            specMenuHtml.style.display = "none";
+            barcodeCanvas.style.display = "none";
+
+            // 2. 如果有開啟懸浮窗，同步清空懸浮窗 UI
+            let pipName = null, pipMenu = null, pipCanvas = null;
+            if (pipWin) {
+                pipName = pipWin.document.getElementById('p-name');
+                pipMenu = pipWin.document.getElementById('s-menu');
+                pipCanvas = pipWin.document.getElementById('bc-canvas');
+                pipMenu.innerHTML = "";
+                pipMenu.style.display = "none";
+                pipCanvas.style.display = "none";
+            }
+
+            if (matchedItems.length === 1) {
+                showBarcode(matchedItems[0]);
+            } else {
+                prodNameHtml.innerText = "請選擇規格";
+                specMenuHtml.style.display = "flex";
+
+                if (pipWin && pipName && pipMenu) {
+                    pipName.innerText = "請選擇規格";
+                    pipMenu.style.display = "grid";
+                }
+
+                matchedItems.forEach(item => {
+                    // 為大網頁建立按鈕
+                    const btn = document.createElement('button');
+                    btn.className = 'spec-btn';
+                    btn.innerText = item.name;
+                    btn.onclick = () => { showBarcode(item); specMenuHtml.style.display = "none"; };
+                    specMenuHtml.appendChild(btn);
+
+                    // 同步為懸浮窗建立按鈕
+                    if (pipWin && pipMenu) {
+                        const pipBtn = pipWin.document.createElement('button');
+                        pipBtn.className = 's-btn';
+                        pipBtn.innerText = item.name;
+                        pipBtn.onclick = () => { showBarcode(item); pipMenu.style.display = "none"; };
+                        pipMenu.appendChild(pipBtn);
+                    }
+                });
+            }
+        }
+
         function showBarcode(item) {
-            // 💡 修正防線：拿掉對於特殊格式條碼的排斥，只要有讀到代碼文字字串就放行
             if (isScanCoolingDown || item.barcode === undefined || item.barcode === null || item.barcode === "") return;
 
+            // 在大主網頁畫條碼
             prodNameHtml.innerText = item.name;
             barcodeCanvas.style.display = "block";
             try { JsBarcode(barcodeCanvas, item.barcode, { format: "CODE128", width: 3, height: 95, displayValue: true, fontSize: 22 }); } catch (e) {}
 
+            // 在置頂懸浮窗畫條碼
             if (pipWin) {
                 const pName = pipWin.document.getElementById('p-name');
                 const bcCanvas = pipWin.document.getElementById('bc-canvas');
@@ -342,16 +367,20 @@
                 } catch (error) {
                     bcCanvas.style.display = "none";
                 }
-
-                isScanCoolingDown = true;
-
-                let encodedCode = encodeURIComponent(item.barcode);
-                fetch(`http://127.0.0.1:5000/scan?code=${encodedCode}`).then(() => {
-                    pName.innerText = item.name + " 🚀已灌入";
-                }).catch(() => {}).finally(() => {
-                    setTimeout(() => { isScanCoolingDown = false; }, 1500);
-                });
             }
+
+            isScanCoolingDown = true;
+
+            // 💡 關鍵修正：不分大網頁還是懸浮窗，只要觸發點擊，一律全面對本地 Python 發射 fetch 訊號！
+            let encodedCode = encodeURIComponent(item.barcode);
+            fetch(`http://127.0.0.1:5000/scan?code=${encodedCode}`).then(() => {
+                prodNameHtml.innerText = item.name + " 🚀已灌入";
+                if (pipWin) {
+                    pipWin.document.getElementById('p-name').innerText = item.name + " 🚀已灌入";
+                }
+            }).catch(() => {}).finally(() => {
+                setTimeout(() => { isScanCoolingDown = false; }, 1500);
+            });
         }
 
         fetchCloudData();
