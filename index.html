@@ -54,10 +54,14 @@
         let BARCODE_DATABASE = [];
         let sheetId = "1rV1jwD3sy5Aib1f2ZnSdSkkrcoEIvJ8DMhzcZbEyaKc"; 
         let lastScannedText = ""; 
-        const ignoreWords = ["我要找", "幫我找", "我要查", "幫我查", "那個", "商品是", "有沒有", "一下", "幫我", "找", "查"];
+        let lastScannedTime = 0; // 新增：記錄上次成功識別的時間戳記
+        const ignoreWords = ["我要找", "幫我找", "我要查", "幫我查", "那個", "商品是", "有沒有", "一下", "幫我", "找", "查", "老闆", "這個", "多少錢"];
 
+        // 擴充同音字字典（把小姐常被聽錯的詞加進來）
         const soundAlikeDictionary = {
-            "藝人": "薏仁", "一人": "薏仁", "義人": "薏仁"
+            "藝人": "薏仁", "一人": "薏仁", "義人": "薏仁",
+            "濾豆": "綠豆", "律豆": "綠豆", "率豆": "綠豆",
+            "紅豆二字": "紅豆"
         };
 
         let pipWin = null;
@@ -81,7 +85,6 @@
                     BARCODE_DATABASE = rows.map(row => {
                         if (!row || !row.c) return null;
                         
-                        // 萬能提取：有格式化文本優先拿，沒寫就拿原始值
                         let pName = "";
                         if (row.c[0]) pName = row.c[0].f ? row.c[0].f.toString().trim() : (row.c[0].v ? row.c[0].v.toString().trim() : "");
                         
@@ -203,30 +206,64 @@
             }, 3500); 
         }
 
+        // 修改後的關鍵語音處理邏輯
         recognition.onresult = (event) => {
             feedWatchDog(); 
             let currentResultIndex = event.resultIndex;
             let transcript = event.results[currentResultIndex][0].transcript.trim();
+            
+            // 1. 基本清洗
             let cleanText = transcript.replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, "");
-            ignoreWords.forEach(word => { cleanText = cleanText.replace(word, ""); });
+            ignoreWords.forEach(word => { cleanText = cleanText.replace(new RegExp(word, 'g'), ""); });
 
+            // 2. 進行同音字替換（優先把整串字裡的錯字換掉）
             for (const key in soundAlikeDictionary) {
-                if (cleanText.includes(key)) cleanText = cleanText.replace(key, soundAlikeDictionary[key]);
+                if (cleanText.includes(key)) cleanText = cleanText.replace(new RegExp(key, 'g'), soundAlikeDictionary[key]);
             }
 
-            if (!cleanText || cleanText.length < 2 || cleanText === lastScannedText) return;
-            
+            if (!cleanText || cleanText.length < 2) return;
+
+            // 3. 防鎖死優化：如果超過 1.5 秒沒觸發成功，就清除上次記錄，允許重複點同一件商品
+            let now = Date.now();
+            if (now - lastScannedTime > 1500) {
+                lastScannedText = "";
+            }
+            if (cleanText === lastScannedText) return;
+
+            // 更新畫面上顯示聽到的文字
             heardTextHtml.innerText = cleanText;
             if (pipWin) { pipWin.document.getElementById('h-text').innerText = cleanText; }
 
-            let matchedItems = BARCODE_DATABASE.filter(item => {
-                let matchName = cleanText.includes(item.name) || item.name.includes(cleanText);
-                let matchAlias = item.aliasList && item.aliasList.some(alias => alias === cleanText);
-                return matchName || matchAlias;
+            // 4. 【核心改動】滑動視窗比對法
+            // 我們不僅比對整串話，還去切出「最後的2個字」、「最後3個字」、「最後4個字」來與資料庫比對
+            // 這樣「老闆這個多少錢紅豆」切出最後兩個字就是「紅豆」，就能完美抓到！
+            let matchCandidates = [cleanText];
+            if (cleanText.length > 2) matchCandidates.push(cleanText.slice(-2));
+            if (cleanText.length > 3) matchCandidates.push(cleanText.slice(-3));
+            if (cleanText.length > 4) matchCandidates.push(cleanText.slice(-4));
+
+            let matchedItems = [];
+            
+            // 從資料庫找有沒有符合任何一個候選字詞的品項
+            BARCODE_DATABASE.forEach(item => {
+                let isMatch = matchCandidates.some(chunk => {
+                    let matchName = chunk.includes(item.name) || item.name.includes(chunk);
+                    let matchAlias = item.aliasList && item.aliasList.some(alias => alias === chunk);
+                    return matchName || matchAlias;
+                });
+                if (isMatch) {
+                    matchedItems.push(item);
+                }
             });
             
+            // 去除重複的品項
+            matchedItems = Array.from(new Set(matchedItems));
+
             if (matchedItems.length === 0) return; 
+            
+            // 成功觸發，更新歷史與時間戳記
             lastScannedText = cleanText;
+            lastScannedTime = now;
 
             renderSpecificationMenu(matchedItems);
         };
@@ -280,7 +317,6 @@
 
             isScanCoolingDown = true;
 
-            // 💡 終極無阻擋發射：管它代碼是啥，強制用萬國碼 URL 編碼發射給 Python
             let finalCode = item.barcode ? item.barcode.toString().trim() : "";
             let encodedCode = encodeURIComponent(finalCode);
 
